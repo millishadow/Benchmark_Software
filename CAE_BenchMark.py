@@ -3,9 +3,17 @@
 Created on Sat Dec  2 21:23:38 2023
 
 @author: 64634
+
+目标是开发一款CAE BENCHMARK库，包含如下需求：
+1.读取csv中的数据，其中第一列为车型项目名称，第二列为座椅模态性能，第三列为座椅重量。
+2.根据读取的数据绘制图表，并且生成统计数据。绘图可以用plotly实现，数据统计可以用pandas。
+3.用户能自行输入项目，性能信息以及重量信息。重新生成图表，并在图表中高亮显示刚输入的信息，更新统计数据并做对比。
+4.由用户选择是否更新并保存数据库。
+
 """
 import sys  
 import pandas as pd  
+import random  
 import plotly.graph_objects as go  
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QInputDialog  
 from PyQt5.QtGui import QIcon  
@@ -15,14 +23,17 @@ class MyApp(QWidget):
     def __init__(self):  
         super().__init__()  
         self.initUI()  
-        self.data = pd.DataFrame()  # 初始化一个空的DataFrame用于存储数据  
-        self.highlighted_data = None  # 用于存储高亮显示的数据 
+        # 初始化一个空的DataFrame用于存储数据  
+        self.data = pd.DataFrame()
+        # 用于存储高亮显示的数据 
+        self.highlighted_data = None
   
     def initUI(self):  
         self.setWindowTitle('车型项目管理与分析系统')  # 设置窗口标题  
-        self.setGeometry(100, 100, 800, 600)  # 设置窗口位置和大小  
+        self.setGeometry(100, 100, 300, 300)  # 设置窗口位置和大小  
         self.setWindowIcon(QIcon('icon.png'))  # 设置窗口图标，需要准备一个icon.png文件  
         layout = QVBoxLayout()  # 创建一个垂直布局管理器  
+        
         # 设置样式表，应用简洁扁平的UI风格  
         self.setStyleSheet("""  
             QWidget {  
@@ -54,14 +65,14 @@ class MyApp(QWidget):
         btn3.clicked.connect(self.add_entry)  
         layout.addWidget(btn3)  # 将按钮添加到布局中  
   
-        # 创建保存更改按钮
+        # 创建保存更改按钮，并连接点击事件到save_data函数  
         btn4 = QPushButton('保存更改', self)  
-        btn4.clicked.connect(self.save_data)  # 这里连接到一个尚未定义的save_data函数，需要实现该函数或注释掉这行代码  
+        btn4.clicked.connect(self.save_data) 
         layout.addWidget(btn4)  # 将按钮添加到布局中 
  
-        # 创建显示统计数据的按钮
+        # 创建显示统计数据的按钮，连接点击事件到show_statistics函数  
         btn5 = QPushButton('显示统计数据', self)  
-        btn5.clicked.connect(self.show_statistics)  # 连接点击事件到show_statistics函数  
+        btn5.clicked.connect(self.show_statistics)
         layout.addWidget(btn5)  # 将按钮添加到布局中  
   
         self.setLayout(layout)  # 设置窗口的布局管理器为上面创建的布局对象  
@@ -73,7 +84,7 @@ class MyApp(QWidget):
         if fname:  # 如果用户选择了文件  
             try:  
                 self.data = pd.read_csv(fname)  # 读取CSV文件数据到DataFrame中  
-                self.data.columns = ["车型项目名称", "前排座椅模态性能", "前排座椅重量"]  # 重命名DataFrame的列名  
+                self.data.columns = ["车型项目名称", "座椅模态性能", "座椅重量"]  # 重命名DataFrame的列名  
                 QMessageBox.information(self, '信息', '数据读取成功！')  # 弹出一个信息对话框提示用户数据读取成功  
             except pd.errors.EmptyDataError:  
                 QMessageBox.critical(self, '错误', '文件为空或格式不正确！')  
@@ -84,40 +95,63 @@ class MyApp(QWidget):
         if self.data.empty:  # 如果DataFrame为空，即没有读取过数据  
             QMessageBox.warning(self, '警告', '请先读取数据！')  # 弹出一个警告对话框提示用户先读取数据  
             return  # 结束函数执行  
-        # 使用Plotly创建一个图表对象，并添加散点图轨迹，x轴为前排座椅模态性能，y轴为前排座椅重量，点的大小和颜色根据车型项目名称确定  
+        
+        # 使用Plotly创建一个图表对象，并添加散点图轨迹，x轴为座椅模态性能，y轴为座椅重量，点的大小和颜色根据车型项目名称确定  
+        # 获取 "车型项目名称" 列中的唯一值  
+        unique_car_names = self.data["车型项目名称"].unique()  
+        # 创建一个空字典来存储颜色映射  
+        color_mapping = {}  
+        # 为每个唯一车型项目名称生成一个随机颜色  
+        for car_name in unique_car_names:  
+            # 生成一个 RGB 颜色，每个通道的取值范围是 0-255  
+            r = random.randint(0, 255)  
+            g = random.randint(0, 255)  
+            b = random.randint(0, 255)  
+            color = f"rgb({r}, {g}, {b})"  
+            color_mapping[car_name] = color 
+        
         fig = go.Figure()  
-        fig.add_trace(go.Scatter(x=self.data["前排座椅模态性能"], y=self.data["前排座椅重量"], mode='markers', marker_color=self.data["车型项目名称"]))  
-        fig.update_layout(title='车型项目与性能及重量的关系', xaxis_title='前排座椅模态性能', yaxis_title='前排座椅重量')  # 更新图表的布局和标题等属性  
-        fig.show()  # 显示图表  
+        # 在创建散点图时使用颜色映射字典设置 marker_color  ，并在鼠标悬停的时候能够显示该数据的信息
+        fig.add_trace(go.Scatter(x=self.data["座椅模态性能"], y=self.data["座椅重量"], mode='markers',  
+                                      marker_color=[color_mapping[name] for name in self.data["车型项目名称"]],  
+                                      hovertext=self.data["车型项目名称"],  # 添加此行设置hovertext为车型项目名称  
+                                      hovertemplate='车型项目名称: %{hovertext}<br>座椅模态性能: %{x}<br>座椅重量: %{y}'  # 添加此行自定义悬停文本格式  
+                                     ))  
+          
+        fig.update_layout(title='车型项目与性能及重量的关系', xaxis_title='座椅模态性能', yaxis_title='座椅重量')  # 更新图表的布局和标题等属性  
+        fig.show()  # 显示图表   
+            
         # 如果有高亮数据显示，则设置高亮  
         if self.highlighted_data:  
-            fig.update_traces(marker_color=[(1 if (row.车型项目名称 == self.highlighted_data[0]) and (row.前排座椅模态性能 == self.highlighted_data[1]) and (row.前排座椅重量 == self.highlighted_data[2]) else 0) for row in self.data.itertuples()],  
+            fig.update_traces(marker_color=[(1 if (row.车型项目名称 == self.highlighted_data[0]) and (row.座椅模态性能 == self.highlighted_data[1]) and (row.座椅重量 == self.highlighted_data[2]) else 0) for row in self.data.itertuples()],  
                       selector=dict(type='scatter', mode='markers'))  
             self.plot_widget.setPlot(fig)  
         
        
     def add_entry(self):
+        #实现交互式数据输入
         project_name, ok = QInputDialog.getText(self, '输入', '请输入车型项目名称:')  
         if ok and project_name:  
-            performance, ok = QInputDialog.getDouble(self, '输入', '请输入前排座椅模态性能:')  
+            performance, ok = QInputDialog.getDouble(self, '输入', '请输入座椅模态性能:')  
             if ok:  
-                weight, ok = QInputDialog.getDouble(self, '输入', '请输入前排座椅重量:')  
+                weight, ok = QInputDialog.getDouble(self, '输入', '请输入座椅重量:')  
                 if ok:  
-                    new_entry = {"车型项目名称": [project_name], "前排座椅模态性能": [performance], "前排座椅重量": [weight]}  
+                    new_entry = {"车型项目名称": [project_name], "座椅模态性能": [performance], "座椅重量": [weight]}  
                     self.data = pd.concat([self.data, pd.DataFrame(new_entry)])  
                     self.highlighted_data = (project_name, performance, weight)  # 存储新添加的数据用于高亮显示  
                     self.plot_data()  
 
 
     def save_data(self):  
-        # 这里只是一个简单的保存方法，您可能需要更复杂的保存逻辑（例如保存到数据库）  
+        # 实现简单的保存功能
         fname, _ = QFileDialog.getSaveFileName(self, '保存CSV文件', '.', 'CSV Files (*.csv)')  
         if fname:  
             self.data.to_csv(fname, index=False)  
             QMessageBox.information(self, '信息', '数据保存成功！')
             
     def show_statistics(self):  
-        statistics = self.data.describe()  # 使用pandas的describe方法计算统计数据  
+        # 使用pandas的describe方法计算统计数据  
+        statistics = self.data.describe() 
         statistics_window = QWidget()  
         statistics_layout = QVBoxLayout()  
         statistics_window.setWindowTitle('统计数据')  
